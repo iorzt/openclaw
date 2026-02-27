@@ -82,6 +82,23 @@ if (isMain) {
   installUnhandledRejectionHandler();
 
   process.on("uncaughtException", (error) => {
+    // Check if this is a recoverable network error (e.g., EPIPE after sleep/wake)
+    // If so, don't exit - let the error handler log it and attempt recovery
+    const errorStr = String(error?.message ?? error ?? "");
+    const errorCode = (error as NodeJS.ErrnoException)?.code;
+    const isRecoverable = 
+      errorCode === "EPIPE" || 
+      errorCode === "ECONNRESET" ||
+      errorCode === "ECONNREFUSED" ||
+      errorStr.includes("EPIPE") ||
+      errorStr.includes("write EPIPE");
+
+    if (isRecoverable) {
+      console.error("[openclaw] Recoverable error (will attempt recovery):", formatUncaughtError(error));
+      // Don't exit - the error handler and runner retry logic will handle recovery
+      return;
+    }
+
     console.error("[openclaw] Uncaught exception:", formatUncaughtError(error));
     process.exit(1);
   });
